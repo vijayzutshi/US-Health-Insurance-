@@ -1,0 +1,324 @@
+---
+title: "Health Insurance Market Place"
+output: pdf_document
+---
+
+## Objective
+Health Insurance Marketplace - dataset from Kaggle
+Explore health and dental plans data in the US Health Insurance Marketplace
+Do exploration data analysis on the following:- 
+1. How do plan rates and benefits vary across states?
+2. How do plan benefits relate to plan rates?
+3. How do plan rates vary by age?
+4. How do plans vary across insurance network providers?
+Data Description
+This data was originally prepared and released by the Centers for Medicare 
+& Medicaid Services (CMS).
+ 
+
+# Library used
+```{r echo = TRUE}
+library(plyr)
+library(dplyr)
+library(ggplot2)
+library(maps)
+library(reshape2)
+```
+
+## Getting,reading and storing data 
+
+
+```{r echo = TRUE}
+setwd("C:/Program Files/RStudio/kaggle/health-insurance-marketplace")
+#dataBenefits <- read.csv("BenefitsCostSharing.csv", header = TRUE, stringsAsFactors = FALSE)
+dataBusinessRules <- read.csv("BusinessRules.csv", header = TRUE, stringsAsFactors = FALSE)
+dataNetwork <- read.csv("Network.csv", header = TRUE, stringsAsFactors = FALSE)
+dataPlanAttrib <- read.csv("PlanAttributes.csv", header = TRUE, stringsAsFactors = FALSE)
+#dataRate <- read.csv("Rate.csv", header = TRUE, stringsAsFactors = FALSE)
+dataSerViceArea <- read.csv("ServiceArea.csv", header = TRUE, stringsAsFactors = FALSE)
+#save(dataBenefits, file = "dataBenefits.RData")
+#save(dataRate, file = "dataRate.RData")
+load("dataBenefits.RData")
+load("dataRate.RData")
+
+```
+
+# Exploratory analysis to determine the plans offered across various US states
+
+```{r echo = FALSE}
+# create a subset of 2014 to 2016 dataset
+planRateBenefit <- subset(dataRate, (dataRate$IndividualRate < "9999" & Age != "Family Option"),
+                          select = c(BusinessYear, StateCode, IssuerId,
+                                               PlanId, Age, IndividualRate, 
+                                               IndividualTobaccoRate))
+ByStateCarrier <- aggregate(planRateBenefit[, 2], by = list(StateCode = planRateBenefit$StateCode, 
+                                          IssuerId =  planRateBenefit$IssuerId,
+                                          PlanId = planRateBenefit$PlanId), length)
+```
+
+
+```{r echo = FALSE}
+# Graph - State vs insurance plans offered across various US states
+ggplot(data = ByStateCarrier, aes(x = StateCode)) +
+  geom_bar(position = "stack") + coord_flip() + xlab("State Code") + ylab("Plans Offered") +
+  ggtitle("Health & Dental Plans across various states\nin US Insurance Market Place")
+
+```
+
+# To analyse plan rates across various US states
+
+```{r echo = FALSE}
+# create a subset of 2014 to 2016 dataset
+VariousRatesPerState <- subset(dataRate, (dataRate$Couple != "NA" |
+                        PrimarySubscriberAndOneDependent != "NA" |
+                        PrimarySubscriberAndTwoDependents != "NA" |
+                        PrimarySubscriberAndThreeOrMoreDependents != "NA" |
+                        CoupleAndOneDependent != "NA" |
+                        CoupleAndTwoDependents != "NA" |
+                        CoupleAndThreeOrMoreDependents != "NA"), 
+                        select = c(StateCode, IndividualRate, Couple, 
+                                   PrimarySubscriberAndOneDependent,
+                                   PrimarySubscriberAndTwoDependents,
+                                   PrimarySubscriberAndThreeOrMoreDependents,
+                                   CoupleAndOneDependent, CoupleAndTwoDependents,
+                                   CoupleAndThreeOrMoreDependents))
+
+TotalRatePerState <- aggregate(VariousRatesPerState[, 1], 
+                               by = list(StateCode = VariousRatesPerState$StateCode,
+                                         IndRate = VariousRatesPerState$IndividualRate,
+                                         Couple = VariousRatesPerState$Couple,
+                                         PriSub1Dep = VariousRatesPerState$PrimarySubscriberAndOneDependent,
+                                         PriSub2Dep = VariousRatesPerState$PrimarySubscriberAndTwoDependents,
+                                         PriSub3Dep = VariousRatesPerState$PrimarySubscriberAndThreeOrMoreDependents,
+                                         Cou1Dep = VariousRatesPerState$CoupleAndOneDependent,
+                                         Cou2Dep = VariousRatesPerState$CoupleAndTwoDependents,
+                                         Cou3Dep = VariousRatesPerState$CoupleAndThreeOrMoreDependents), length)
+
+# Melt the data frame as one 
+dfmelt <- melt(TotalRatePerState[,c('StateCode','IndRate','Couple','PriSub1Dep', 'PriSub2Dep',
+                                 'PriSub3Dep', 'Cou1Dep', 'Cou2Dep',
+                                 'Cou3Dep')], id.vars = 1)
+# Plot various rate plans across various US states
+# except Individual Tobacco rates as it is NA througout the dataset
+ggplot(dfmelt,aes(x = StateCode,y = value/1000)) + 
+  geom_bar(aes(fill = variable),position = "stack", stat = "identity") + coord_flip() +
+  ylab("Plan rates") + xlab("State Code") +
+  ggtitle("Plot of various Health insurance Plan rates\nAcross Various US States") +
+  scale_fill_discrete(name = "Rate Plans")
+
+```
+
+# Analyse Plan rate vs age  
+
+```{r echo = FALSE}
+# create a subset of 2014 to 2016 dataset
+PlanRatevsAge <- subset(dataRate, (dataRate$IndividualRate < "9999" &  StateCode != "NA" |
+                 Age != "NA" | IndividualRate != "NA"), 
+                 select = c(StateCode, Age, IndividualRate)) 
+# Filter data for age group less than equal to 22
+TotRatevsAge1 <- filter(PlanRatevsAge, (Age <= "22"))
+TotRatevsAge1 <- subset(TotRatevsAge1, !duplicated(TotRatevsAge1[, 3]))
+# row 81 producing wrong data so it is removed from the dataset
+TotRatevsAge1 <- TotRatevsAge1[-(81),]
+# Filter data for age group between 23 and 40
+TotRatevsAge2 <- filter(PlanRatevsAge, (Age >= "23" & Age <="40"))
+TotRatevsAge2 <- subset(TotRatevsAge2, !duplicated(TotRatevsAge2[, 3]))
+# Filter data for age group between 41 and 59
+TotRatevsAge3 <- filter(PlanRatevsAge, (Age >= "41" & Age <="59"))
+TotRatevsAge3 <- subset(TotRatevsAge3, !duplicated(TotRatevsAge3[, 3]))
+# Filter data for Family Option age group
+TotRatevsAge4 <- filter(PlanRatevsAge, Age == "Family Option")
+TotRatevsAge4 <- subset(TotRatevsAge4, !duplicated(TotRatevsAge4[, 3]))
+# Filter data for age group between 60 and 64 
+TotRatevsAge5 <- filter(PlanRatevsAge, (Age >= "60" & Age <= "64"))
+TotRatevsAge5 <- subset(TotRatevsAge5, !duplicated(TotRatevsAge5[, 3]))
+# Filter data for age group 65 and over
+TotRatevsAge6 <- filter(PlanRatevsAge, Age == "65 and over")
+TotRatevsAge6 <- subset(TotRatevsAge6, !duplicated(TotRatevsAge6[, 3]))
+# row 37 producing wrong data so it is removed from the dataset
+TotRatevsAge6 <- TotRatevsAge6[-(37),]
+```
+
+```{r echo = FALSE}
+# Plot 1 - age group 0 to 22
+ggplot(TotRatevsAge1, aes(x = StateCode, y = IndividualRate, fill = Age)) +
+  geom_bar(position = "dodge", stat = "identity") + 
+  ylab("Individual Rates") + xlab("State Code") +
+  ggtitle("Plan Rate vs Age across various US States\nfrom 2014 to 2016") +
+  theme(text = element_text(size=8))
+```
+
+```{r echo = FALSE}
+# Plot 2 - age group 23 to 40
+ggplot(TotRatevsAge2, aes(x = StateCode, y = IndividualRate/1000, fill = Age)) +
+  geom_bar(position = "stack", stat = "identity") +
+  ylab("Individual Rates") + xlab("State Code") +
+  ggtitle("Plan Rate vs Age across various US States\nfrom 2014 to 2016") +
+  theme(text = element_text(size=8))
+```
+
+```{r echo = FALSE}
+# Plot 3 - age group 41 to 59  
+ggplot(TotRatevsAge3, aes(x = StateCode, y = IndividualRate/1000, fill = Age)) +
+  geom_bar(position = "stack", stat = "identity") + 
+  ylab("Individual Rates") + xlab("State Code") +
+  ggtitle("Plan Rate vs Age across various US States\nfrom 2014 to 2016") +
+  theme(text = element_text(size=8))  
+```
+
+```{r echo = FALSE}
+# Plot 4 - age group(Familiy Option)  
+ggplot(TotRatevsAge4, aes(x = StateCode, y = IndividualRate, fill = Age)) +
+  geom_bar(position = "stack", stat = "identity") +
+  ylab("Individual Rates") + xlab("State Code") +
+  ggtitle("Plan Rate vs Age across various US States\nfrom 2014 to 2016") +
+  theme(text = element_text(size=8))
+
+```
+
+```{r echo = FALSE}
+# Plot 5 - age group 60 to 64
+ggplot(TotRatevsAge5, aes(x = StateCode, y = IndividualRate/1000, fill = Age)) +
+  geom_bar(position = "stack", stat = "identity") +
+  ylab("Individual Rates") + xlab("State Code") +
+  ggtitle("Plan Rate vs Age across various US States\nfrom 2014 to 2016") +
+  theme(text = element_text(size=8))
+```
+
+```{r echo = FALSE}
+# Plot 6 - age group(65 and over)
+ggplot(TotRatevsAge6, aes(x = StateCode, y = IndividualRate/1000, fill = Age)) +
+  geom_bar(position = position_stack(), stat = "identity") +
+  ylab("Individual Rates") + xlab("State Code") +
+  ggtitle("Plan Rate vs Age across various US States\nfrom 2014 to 2016") +
+  theme(text = element_text(size=8))
+```
+
+# Categorise health plan sold to individuals and small group
+# market into coverage tiers based on Issuer Actuarial value
+# Bronze - 60%, Silver - 70%, Gold - 80%, Platinum - 90% 
+# Catastrophic - below 60% sold to individuals 
+```{r echo = FALSE}
+
+IssActuCov <- subset(dataPlanAttrib, (dataPlanAttrib$IssuerActuarialValue != ""),
+              select = c("StateCode", "IssuerId", "ServiceAreaId", 
+                         "IssuerActuarialValue", "MarketCoverage"))
+IssActuCov$IssuerActuarialValue <- gsub("%", "", IssActuCov$IssuerActuarialValue)
+IssActuCov$IssuerActuarialValue <- as.integer(IssActuCov$IssuerActuarialValue)
+# Bronze Coverage Tier 
+BronzeTier <- filter(IssActuCov, (IssuerActuarialValue >= 60 & 
+                                    IssuerActuarialValue < 70))
+BronzeTier <- BronzeTier %>%
+  group_by(StateCode) %>% 
+  summarise(BronzeTierCov = mean(IssuerActuarialValue))
+# Silver Coverage Tier
+SilverTier <- filter(IssActuCov, (IssuerActuarialValue >= 70 & 
+                                        IssuerActuarialValue < 80))
+SilverTier <- SilverTier %>%
+  group_by(StateCode) %>% 
+  summarise(SilverTierCov = mean(IssuerActuarialValue))
+# Gold Coverage Tier
+GoldTier <- filter(IssActuCov, (IssuerActuarialValue >= 80 & 
+                                        IssuerActuarialValue < 90))
+GoldTier <- GoldTier %>%
+  group_by(StateCode) %>% 
+  summarise(GoldTierCov = mean(IssuerActuarialValue))
+# Platinum Coverage tier
+PlatinumTier <- filter(IssActuCov, (IssuerActuarialValue >= 90 &
+                                      IssuerActuarialValue <= 100))
+PlatinumTier <- PlatinumTier %>%
+  group_by(StateCode) %>% 
+  summarise(PlatinumTierCov = mean(IssuerActuarialValue))
+# Catastrophic Tier falls below 60% Actuarial Value
+CatasTier <- filter(IssActuCov, (IssuerActuarialValue < 60))
+CatasTier <- CatasTier %>%
+  group_by(StateCode) %>% 
+  summarise(CatasTierCov = mean(IssuerActuarialValue))
+# join all 5 coverage tiers 
+CombinedCovTier <- join_all(list(BronzeTier, SilverTier, GoldTier, PlatinumTier, CatasTier), 
+                            by = "StateCode")
+
+```
+
+```{r echo = FALSE}
+# load US map
+MapInsData <- CombinedCovTier
+#MapInsData <- group_by(MapInsData, StateCode) %>% 
+ # summarise(MedIndRate = median(IndividualRate))
+us_state_map <- map_data("state")
+MapInsData$region <- tolower(state.name[match(MapInsData$StateCode,state.abb)])
+statename <- group_by(us_state_map, region) %>%
+  summarise(long = mean(long), lat = mean(lat))
+mapdata <- left_join(MapInsData, us_state_map, by="region")
+```
+
+```{r echo = FALSE}
+# Plot for Catastrophic tier 
+p <- ggplot()+ geom_polygon(data=mapdata, aes(x= long, y=lat, group = group,
+                                             fill = mapdata$CatasTierCov), colour="white") 
+p1 <- p+geom_text(data=statename, aes(x=long, y=lat, label=region),  na.rm = T, size=1)+
+  coord_map() + scale_fill_continuous(name = "Actuarial Value in %", 
+          guide = guide_legend()) +
+  theme(legend.position = "bottom", axis.text = element_blank()) +
+  ggtitle("US Health Insurance Plan\nCatastrophic Coverage Tier Based on Actuarial Value")
+print(p1)
+ggsave("inscatascov.png", width = 5, height = 5)
+
+```
+
+```{r echo = FALSE}
+# Plot for Bronze Coverage Tier
+p <- ggplot()+ geom_polygon(data=mapdata, aes(x= long, y=lat, group = group,
+                                              fill = mapdata$BronzeTierCov), colour="red") 
+p1 <- p+geom_text(data=statename, aes(x=long, y=lat, label=region),  na.rm = T, size=1)+
+  coord_map() + scale_fill_continuous(name = "Actuarial Value in %", 
+                                      guide = guide_legend()) +
+  theme(legend.position = "bottom", axis.text = element_blank()) +
+  ggtitle("US Health Insurance Plan\nBronze Coverage Tier Based on Actuarial Value")
+print(p1)
+ggsave("insbronzecov.png", width = 5, height = 5)
+```
+
+```{r echo = FALSE}
+# Plot for Silver Coverage Tier
+p <- ggplot()+ geom_polygon(data=mapdata, aes(x= long, y=lat, group = group,
+                                              fill = mapdata$SilverTierCov), colour="red") 
+p1 <- p+geom_text(data=statename, aes(x=long, y=lat, label=region),  na.rm = T, size=1)+
+  coord_map() + scale_fill_continuous(name = "Actuarial Value in %", 
+                                      guide = guide_legend()) +
+  theme(legend.position = "bottom", axis.text = element_blank()) +
+  ggtitle("US Health Insurance Plan\nSilver Coverage Tier Based on Actuarial Value")
+
+ggsave("inssilvercov.png", width = 5, height = 5)
+print(p1)
+```
+
+```{r echo = FALSE}
+# Plot for Gold Coverage Tier
+p <- ggplot()+ geom_polygon(data=mapdata, aes(x= long, y=lat, group = group,
+                                              fill = mapdata$GoldTierCov), colour="red") 
+p1 <- p+geom_text(data=statename, aes(x=long, y=lat, label=region),  na.rm = T, size=1)+
+  coord_map() + scale_fill_continuous(name = "Actuarial Value in %", 
+                                      guide = guide_legend()) +
+  theme(legend.position = "bottom", axis.text = element_blank()) +
+  ggtitle("US Health Insurance Plan\nGold Coverage Tier Based on Actuarial Value")
+print(p1)
+ggsave("insgoldcov.png", width = 5, height = 5)
+
+```
+
+```{r echo = FALSE}
+# Plot for Platinum Coverage Tier
+p <- ggplot()+ geom_polygon(data=mapdata, aes(x= long, y=lat, group = group,
+                                              fill = mapdata$PlatinumTierCov), colour="red") 
+p1 <- p+geom_text(data=statename, aes(x=long, y=lat, label= region),  na.rm = T, size=1)+
+  coord_map() + scale_fill_continuous(name = "Actuarial Value in %", 
+                                      guide = guide_legend()) +
+  theme(legend.position = "bottom", axis.text = element_blank()) +
+  ggtitle("US Health Insurance Plan\nPlatinum Coverage Tier Based on Actuarial Value")
+print(p1)
+ggsave("insplatinumcov.png", width = 5, height = 5)
+```
+
+
+
